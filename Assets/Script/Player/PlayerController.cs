@@ -1,8 +1,10 @@
 using System.Collections;
 using UnityEngine;
+using UnityEngine.UI;
 using TMPro;
 
 [RequireComponent(typeof(Rigidbody2D))]
+[RequireComponent(typeof(AudioSource))] 
 public class PlayerController : MonoBehaviour
 {
     [Header("移动设置")]
@@ -43,7 +45,7 @@ public class PlayerController : MonoBehaviour
     private bool isAttacking;
 
     [Header("右键大招设置")]
-    public GameObject skillPrefab; // 大招特效预制体槽位
+    public GameObject skillPrefab; 
     public float skillRange = 4f; 
     public int skillDamage = 20; 
     public float skillCooldown = 5f; 
@@ -51,15 +53,32 @@ public class PlayerController : MonoBehaviour
     private bool canSkill = true;
     private bool isSkilling;
 
+    [Header("画面反馈(受伤抖动)")]
+    private Transform mainCameraTransform; 
+    public float shakeDuration = 0.2f;     
+    public float shakeMagnitude = 0.15f;   
+    private bool isShaking = false;
+
+    [Header("音效设置")]
+    private AudioSource audioSource;
+    public AudioClip swingSFX; 
+    public AudioClip hitSFX;   
+    public AudioClip dashSFX;  
+    public AudioClip skillSFX; 
+    public AudioClip hurtSFX; // 受伤音效槽位
+
     private int maxHealth = 100;
     private int currentHealth;
 
     void Start()
     {
         rb = GetComponent<Rigidbody2D>();
+        audioSource = GetComponent<AudioSource>();
         viewCamera = Camera.main; 
-        currentHealth = maxHealth;
+        
+        if (viewCamera != null) mainCameraTransform = viewCamera.transform;
 
+        currentHealth = maxHealth;
         UpdateHealthUI();
         UpdateDashUI(1f);
         UpdateSkillUI(1f);
@@ -146,6 +165,7 @@ public class PlayerController : MonoBehaviour
     {
         canDash = false;
         isDashing = true;
+        if (audioSource != null && dashSFX != null) audioSource.PlayOneShot(dashSFX);
         Vector2 dashDirection = moveInput == Vector2.zero ? ((Vector2)mousePos - rb.position).normalized : moveInput;
         rb.linearVelocity = dashDirection * dashSpeed;
         yield return new WaitForSeconds(dashDuration);
@@ -168,10 +188,19 @@ public class PlayerController : MonoBehaviour
         }
         
         Collider2D[] hitEnemies = Physics2D.OverlapCircleAll(finalAttackPoint, attackRange * 0.5f, enemyLayers);
-        foreach (Collider2D enemy in hitEnemies)
+        
+        if (hitEnemies.Length > 0)
         {
-            EnemyHealth enemyHealth = enemy.GetComponent<EnemyHealth>();
-            if (enemyHealth != null) enemyHealth.TakeDamage(attackDamage);
+            if (audioSource != null && hitSFX != null) audioSource.PlayOneShot(hitSFX);
+            foreach (Collider2D enemy in hitEnemies)
+            {
+                EnemyHealth enemyHealth = enemy.GetComponent<EnemyHealth>();
+                if (enemyHealth != null) enemyHealth.TakeDamage(attackDamage);
+            }
+        }
+        else
+        {
+            if (audioSource != null && swingSFX != null) audioSource.PlayOneShot(swingSFX);
         }
 
         yield return new WaitForSeconds(attackCooldown);
@@ -183,12 +212,12 @@ public class PlayerController : MonoBehaviour
         canSkill = false;
         isSkilling = true;
         rb.linearVelocity = Vector2.zero; 
+        if (audioSource != null && skillSFX != null) audioSource.PlayOneShot(skillSFX);
 
-        // 在玩家中心生成大招预制体特效
         if (skillPrefab != null)
         {
             GameObject vfx = Instantiate(skillPrefab, transform.position, Quaternion.identity);
-            Destroy(vfx, 1.5f); // 1.5秒后自动销毁（可根据粒子实际时长微调）
+            Destroy(vfx, 1.5f);
         }
 
         Collider2D[] hitEnemies = Physics2D.OverlapCircleAll(transform.position, skillRange, enemyLayers);
@@ -203,17 +232,53 @@ public class PlayerController : MonoBehaviour
         skillCooldownTimer = skillCooldown;
     }
 
+    // --- 摄像头颤抖协程 ---
+    IEnumerator ShakeCamera()
+    {
+        if (isShaking || mainCameraTransform == null) yield break;
+        isShaking = true;
+
+        // 记录 Main Camera 相对于 Holder 的初始本地坐标 (应该是 0,0,-10)
+        Vector3 originalLocalPos = mainCameraTransform.localPosition;
+        float elapsed = 0.0f;
+
+        while (elapsed < shakeDuration)
+        {
+            // 生成随机偏移，2D场景抖动XY即可
+            float x = Random.Range(-1f, 1f) * shakeMagnitude;
+            float y = Random.Range(-1f, 1f) * shakeMagnitude;
+
+            // 应用本地坐标偏移
+            mainCameraTransform.localPosition = originalLocalPos + new Vector3(x, y, 0f);
+
+            elapsed += Time.deltaTime;
+            yield return null;
+        }
+
+        // 结束后恢复原位
+        mainCameraTransform.localPosition = originalLocalPos;
+        isShaking = false;
+    }
+
     public void TakeDamage(int damage)
     {
         currentHealth -= damage;
         UpdateHealthUI();
+
+        // 受伤音效
+        if (audioSource != null && hurtSFX != null) audioSource.PlayOneShot(hurtSFX);
+
+        // 触发摄像机颤抖
+        if (currentHealth > 0)
+        {
+            StartCoroutine(ShakeCamera());
+        }
     }
 
     void OnDrawGizmosSelected()
     {
         Gizmos.color = Color.red;
         if (attackPoint != null) Gizmos.DrawWireSphere(attackPoint.position, attackRange * 0.5f);
-        
         Gizmos.color = Color.blue;
         Gizmos.DrawWireSphere(transform.position, skillRange);
     }
