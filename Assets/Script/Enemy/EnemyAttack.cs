@@ -7,6 +7,12 @@ public class EnemyAttack : MonoBehaviour
     public float attackCooldown = 1f; 
     
     private float nextAttackTime;
+    private Animator anim; // 新增：动画控制器
+
+    void Start()
+    {
+        anim = GetComponent<Animator>(); // 新增：获取组件
+    }
 
     void OnCollisionStay2D(Collision2D collision)
     {
@@ -18,6 +24,7 @@ public class EnemyAttack : MonoBehaviour
                 if (player != null)
                 {
                     player.TakeDamage(damage);
+                    anim.SetTrigger("doAttack"); // 新增：触发攻击动画
                     nextAttackTime = Time.time + attackCooldown; 
                 }
             }
