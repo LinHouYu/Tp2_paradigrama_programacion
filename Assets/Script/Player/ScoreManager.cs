@@ -29,10 +29,19 @@ public class ScoreManager : MonoBehaviour
         UpdateTimerUI();
     }
 
+   
+    public int scoreToWin = 100; // Define cuántos puntos se necesitan para ganar
+
     public void AddScore(int amount)
     {
         score += amount;
         UpdateScoreUI();
+
+        // 🌟 NUEVO: Verificar condición de victoria
+        if (score >= scoreToWin && MenuManager.Instance != null)
+        {
+            MenuManager.Instance.TriggerVictory();
+        }
     }
 
     void UpdateScoreUI()
@@ -56,4 +65,5 @@ public class ScoreManager : MonoBehaviour
             timerText.text = string.Format("TIME: {0:D2}:{1:D2}:{2:D3}", minutes, seconds, milliseconds);
         }
     }
+
 }

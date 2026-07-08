@@ -314,12 +314,19 @@ public class PlayerController : MonoBehaviour
         {
             StartCoroutine(ShakeCamera());
         }
+        // ... (dentro de PlayerController.cs -> TakeDamage)
         else
         {
             // --- 新增：死亡逻辑 ---
             anim.SetTrigger("doDead"); // 触发死亡动画
-            this.enabled = false;      // 禁用玩家控制脚本，防止死后继续移动或攻击
-            rb.linearVelocity = Vector2.zero; // 让死后的玩家立刻停下来
+            this.enabled = false;      // 禁用玩家控制脚本
+            rb.linearVelocity = Vector2.zero;
+
+            // 🌟 NUEVO: Llamar al menú de derrota tras un breve delay o inmediatamente
+            if (MenuManager.Instance != null)
+            {
+                MenuManager.Instance.Invoke("TriggerDefeat", 1.0f); // 1 segundo de espera para ver la animación de muerte
+            }
         }
     }
 
